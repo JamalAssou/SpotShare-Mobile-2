@@ -1,25 +1,88 @@
-import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import * as ImagePicker from 'react-native-image-picker'; // Installer via 'npm install react-native-image-picker'
+import React, { useState, useEffect } from 'react';
+import { View, TextInput, Button, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker'; // Utilisation du module d'Expo
+import { Picker } from '@react-native-picker/picker'; // Pour la sélection de catégories
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { app } from './firebaseConfig';
 
 const AddScreen: React.FC = () => {
-    const [image, setImage] = useState<any>(null);
+    const [image, setImage] = useState<string | null>(null); // Stocker l'URI de l'image
     const [text, setText] = useState('');
     const [address, setAddress] = useState('');
     const [price, setPrice] = useState('');
+    const [category, setCategory] = useState('urbex'); // Valeur par défaut
 
-    const handleChooseImage = () => {
-        ImagePicker.launchImageLibrary(
-            {
-                mediaType: 'photo', // Vous pouvez choisir 'photo', 'video' ou 'mixed'
-                quality: 1, // Optionnel: qualité de l'image de 0 à 1
-            },
-            (response) => {
-                if (response.assets && response.assets.length > 0) {
-                    setImage(response.assets[0].uri);
-                }
+    const firestore = getFirestore(app);
+    const storage = getStorage(app); // Initialiser Firebase Storage
+
+    useEffect(() => {
+        requestPermissions();
+    }, []);
+
+    // Demander les permissions d'accès à la galerie pour Expo
+    const requestPermissions = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Erreur', 'Nous avons besoin des permissions pour accéder à vos photos.');
+        }
+    };
+
+    // Fonction pour ouvrir la galerie et choisir une image
+    const handleChooseImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                quality: 1,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setImage(result.assets[0].uri); // Stocker l'URI de l'image
+            } else {
+                Alert.alert('Aucune image sélectionnée', 'Veuillez sélectionner une image.');
             }
-        );
+        } catch (error) {
+            Alert.alert('Erreur', 'Une erreur est survenue lors de la sélection de l\'image.');
+        }
+    };
+
+    // Fonction pour soumettre les données
+    const handleSubmit = async () => {
+        if (!image || !text || !address || !price || !category) {
+            Alert.alert('Erreur', 'Tous les champs doivent être remplis.');
+            return;
+        }
+
+        try {
+            // Télécharger l'image vers Firebase Storage
+            const response = await fetch(image);
+            const blob = await response.blob();
+            const storageRef = ref(storage, `images/${Date.now()}`); // Créer une référence pour stocker l'image
+            await uploadBytes(storageRef, blob); // Télécharger l'image
+
+            // Obtenir l'URL de l'image téléchargée
+            const downloadURL = await getDownloadURL(storageRef);
+
+            // Ajouter les données à Firestore
+            await addDoc(collection(firestore, 'spots'), {
+                image: downloadURL, // Stocker l'URL de l'image
+                text,
+                address,
+                price: parseFloat(price),
+                category,
+                createdAt: new Date(),
+            });
+
+            Alert.alert('Succès', 'Élément ajouté avec succès');
+            setImage(null);
+            setText('');
+            setAddress('');
+            setPrice('');
+            setCategory('urbex');
+        } catch (error) {
+            Alert.alert('Erreur', 'Une erreur est survenue lors de l\'ajout.');
+        }
     };
 
     return (
@@ -34,14 +97,12 @@ const AddScreen: React.FC = () => {
                 value={text}
                 onChangeText={setText}
             />
-
             <TextInput
                 style={styles.input}
                 placeholder="Ajouter une adresse"
                 value={address}
                 onChangeText={setAddress}
             />
-
             <TextInput
                 style={styles.input}
                 placeholder="Ajouter un prix"
@@ -49,8 +110,19 @@ const AddScreen: React.FC = () => {
                 value={price}
                 onChangeText={setPrice}
             />
+            <Text style={styles.label}>Sélectionner une catégorie :</Text>
+            <Picker
+                selectedValue={category}
+                style={styles.picker}
+                onValueChange={(itemValue) => setCategory(itemValue)}
+            >
+                <Picker.Item label="Urbex" value="urbex" />
+                <Picker.Item label="Park" value="park" />
+                <Picker.Item label="Ville" value="ville" />
+                <Picker.Item label="Campagne" value="campagne" />
+            </Picker>
 
-            <Button title="Soumettre" onPress={() => console.log({ image, text, address, price })} />
+            <Button title="Soumettre" onPress={handleSubmit} />
         </View>
     );
 };
@@ -76,6 +148,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         padding: 10,
         marginBottom: 15,
+    },
+    picker: {
+        height: 50,
+        width: '100%',
+    },
+    label: {
+        marginBottom: 10,
+        fontSize: 16,
     },
 });
 

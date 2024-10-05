@@ -1,37 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { getFirestore, collection, query, orderBy, onSnapshot } from 'firebase/firestore';  // Importer les fonctions nécessaires
+import { app } from './firebaseConfig';  // Importer l'instance Firebase
 
 const HomeScreen: React.FC = () => {
     const navigation: any = useNavigation();
+    const [images, setImages] = useState<any[]>([]);  // Utiliser un tableau d'objets pour inclure plus d'infos (texte, adresse, etc.)
 
-    // Simuler des images pour la démonstration
-    const [images, setImages] = useState<string[]>([
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-        'https://via.placeholder.com/150',
-    ]);
+    // Initialiser Firestore
+    const firestore = getFirestore(app);
 
-    // Fonction pour récupérer des images de la base de données (à implémenter plus tard)
+    // Fonction pour récupérer des images depuis Firestore
     useEffect(() => {
-        // Ici, tu vas récupérer les images depuis la base de données
+        const q = query(collection(firestore, 'spots'), orderBy('createdAt', 'desc'));  // Créer une requête
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedImages = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
+            setImages(fetchedImages);
+        });
+
+        // Nettoyer l'écouteur Firestore lors du démontage du composant
+        return () => unsubscribe();
     }, []);
 
-    const renderImage = ({ item }: { item: string }) => (
+    const renderImage = ({ item }: { item: any }) => (
         <View style={styles.imageContainer}>
-            <Image source={{ uri: item }} style={styles.image} />
+            {item.image ? (
+                <Image source={{ uri: item.image }} style={styles.image} />
+            ) : (
+                <Text>Aucune image</Text>
+            )}
+            {/*<Text style={styles.imageText}>Prix: {item.price} €</Text>*/}
+            <Text style={styles.imageText}>Adresse: {item.address}</Text>
+            {/*<Text style={styles.imageText}>Catégorie: {item.category}</Text>*/}
+            <Text style={styles.imageText}>Texte: {item.text}</Text>
         </View>
     );
 
@@ -46,7 +51,7 @@ const HomeScreen: React.FC = () => {
             <FlatList
                 data={images}
                 renderItem={renderImage}
-                keyExtractor={(item, index) => index.toString()}
+                keyExtractor={(item) => item.id}
                 numColumns={2}  // Nombre de colonnes pour la grille
                 style={styles.imageGrid}
             />
@@ -62,7 +67,7 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'rgb(179,10,10)',
+        backgroundColor: 'rgb(149,85,85)',
         paddingTop: 50,
         position: 'relative',
     },
@@ -71,7 +76,6 @@ const styles = StyleSheet.create({
         top: 20,
         right: 10,
         zIndex: 1,
-        //backgroundColor: '#ffffff',
         borderRadius: 40,
         width: 'auto',
     },
@@ -89,7 +93,7 @@ const styles = StyleSheet.create({
         margin: 10,
         backgroundColor: '#fff',
         borderRadius: 15,
-        height: 150,
+        height: 240, // Augmenté pour mieux s'adapter à l'image
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
@@ -100,9 +104,14 @@ const styles = StyleSheet.create({
     },
     image: {
         width: '100%',
-        height: '100%',
+        height: '70%',
         borderRadius: 15,
         resizeMode: 'cover',
+    },
+    imageText: {
+        marginTop: 5,
+        fontSize: 14,
+        color: '#333',
     },
     addButton: {
         position: 'absolute',
