@@ -11,6 +11,7 @@ import LoginScreen from './Login';
 import RegisterScreen from './Registration';
 import HomeScreen from './HomeScreen';
 import AddScreen from './AddScreen'; // Importer le nouvel écran de formulaire
+import DetailScreen from './DetailScreen';
 
 const Stack = createStackNavigator();
 
@@ -41,6 +42,8 @@ const App: React.FC = () => {
                             {() => <HomeScreen onLogout={() => setUser(null)} />}
                         </Stack.Screen>
                         <Stack.Screen name="Add" component={AddScreen} options={{ title: 'Ajouter un élément' }} />
+                        <Stack.Screen name="Detail" options={{title: 'Detail'}} component={DetailScreen} />
+
                     </>
                 ) : (
                     // Si l'utilisateur n'est pas connecté, afficher les écrans de connexion et d'inscription
@@ -59,6 +62,7 @@ const App: React.FC = () => {
                         <Stack.Screen name="Register" options={{ title: 'Inscription' }}>
                             {() => <RegisterScreen goToLogin={() => setIsRegistering(false)} />}
                         </Stack.Screen>
+
                     </>
                 )}
             </Stack.Navigator>

@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { getFirestore, collection, query, orderBy, onSnapshot } from 'firebase/firestore';  // Importer les fonctions nécessaires
-import { app } from './firebaseConfig';  // Importer l'instance Firebase
+import { getFirestore, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { app } from './firebaseConfig';
 
 const HomeScreen: React.FC = () => {
     const navigation: any = useNavigation();
-    const [images, setImages] = useState<any[]>([]);  // Utiliser un tableau d'objets pour inclure plus d'infos (texte, adresse, etc.)
+    const [images, setImages] = useState<any[]>([]);
 
-    // Initialiser Firestore
     const firestore = getFirestore(app);
 
-    // Fonction pour récupérer des images depuis Firestore
     useEffect(() => {
-        const q = query(collection(firestore, 'spots'), orderBy('createdAt', 'desc'));  // Créer une requête
+        const q = query(collection(firestore, 'spots'), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetchedImages = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -22,41 +20,48 @@ const HomeScreen: React.FC = () => {
             setImages(fetchedImages);
         });
 
-        // Nettoyer l'écouteur Firestore lors du démontage du composant
         return () => unsubscribe();
     }, []);
 
     const renderImage = ({ item }: { item: any }) => (
-        <View style={styles.imageContainer}>
+        <TouchableOpacity
+            style={styles.imageContainer}
+            onPress={() => navigation.navigate('Detail', {
+                image: item.image,
+                price: item.price,
+                description: item.text,
+                category: item.category,
+                address: item.address,
+                latitude: item.latitude,
+                longitude: item.longitude,
+            })}
+        >
             {item.image ? (
                 <Image source={{ uri: item.image }} style={styles.image} />
             ) : (
                 <Text>Aucune image</Text>
             )}
-            {/*<Text style={styles.imageText}>Prix: {item.price} €</Text>*/}
-            <Text style={styles.imageText}>Adresse: {item.address}</Text>
-            {/*<Text style={styles.imageText}>Catégorie: {item.category}</Text>*/}
-            <Text style={styles.imageText}>Texte: {item.text}</Text>
-        </View>
+            <Text style={styles.imageText}>{item.text}</Text>
+        </TouchableOpacity>
     );
 
     return (
         <View style={styles.container}>
-            {/* Bouton Profil */}
-            <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
-                <Image source={require('./assets/profile.png')} style={styles.topBarIcon} />
-            </TouchableOpacity>
+            <View style={styles.header}>
+                <Text style={styles.title}>SpotShare</Text>
+                <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
+                    <Image source={require('./assets/profile.png')} style={styles.topBarIcon} />
+                </TouchableOpacity>
+            </View>
 
-            {/* Liste d'images avec défilement */}
             <FlatList
                 data={images}
                 renderItem={renderImage}
                 keyExtractor={(item) => item.id}
-                numColumns={2}  // Nombre de colonnes pour la grille
+                numColumns={2}
                 style={styles.imageGrid}
             />
 
-            {/* Bouton "add" */}
             <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('Add')}>
                 <Image source={require('./assets/add.png')} style={styles.addIcon} />
             </TouchableOpacity>
@@ -67,15 +72,23 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'rgb(149,85,85)',
+        backgroundColor: 'rgb(255,255,255)',
         paddingTop: 50,
         position: 'relative',
     },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        marginBottom: 0,
+    },
+    title: {
+        fontSize: 40,
+        fontWeight: 'bold',
+        color: '#000000',
+    },
     profileButton: {
-        position: 'absolute',
-        top: 20,
-        right: 10,
-        zIndex: 1,
         borderRadius: 40,
         width: 'auto',
     },
@@ -85,15 +98,15 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     imageGrid: {
-        marginTop: 10,  // Laisser de la place pour le bouton de profil en haut
+        marginTop: 10,
         paddingHorizontal: 10,
     },
     imageContainer: {
         flex: 1,
         margin: 10,
-        backgroundColor: '#fff',
+        backgroundColor: '#d6d6d6',
         borderRadius: 15,
-        height: 240, // Augmenté pour mieux s'adapter à l'image
+        height: 240,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
@@ -104,7 +117,7 @@ const styles = StyleSheet.create({
     },
     image: {
         width: '100%',
-        height: '70%',
+        height: '80%',
         borderRadius: 15,
         resizeMode: 'cover',
     },
@@ -112,6 +125,7 @@ const styles = StyleSheet.create({
         marginTop: 5,
         fontSize: 14,
         color: '#333',
+
     },
     addButton: {
         position: 'absolute',
@@ -135,5 +149,4 @@ const styles = StyleSheet.create({
         tintColor: '#fff',
     },
 });
-
 export default HomeScreen;

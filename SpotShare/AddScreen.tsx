@@ -5,16 +5,20 @@ import { Picker } from '@react-native-picker/picker'; // Pour la sélection de c
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { app } from './firebaseConfig';
+import axios from 'axios'; // Importer axios pour les requêtes HTTP
 
 const AddScreen: React.FC = () => {
-    const [image, setImage] = useState<string | null>(null); // Stocker l'URI de l'image
+    const [image, setImage] = useState<string | null>(null);
     const [text, setText] = useState('');
     const [address, setAddress] = useState('');
     const [price, setPrice] = useState('');
     const [category, setCategory] = useState('urbex'); // Valeur par défaut
+    const [loading, setLoading] = useState(false);
 
     const firestore = getFirestore(app);
-    const storage = getStorage(app); // Initialiser Firebase Storage
+    const storage = getStorage(app);
+
+    const GEOCODE_API_KEY = '401c85cf0f7b477696b22d5ac2603fcb'; // Remplace par ta clé OpenCage
 
     useEffect(() => {
         requestPermissions();
@@ -38,12 +42,25 @@ const AddScreen: React.FC = () => {
             });
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                setImage(result.assets[0].uri); // Stocker l'URI de l'image
+                setImage(result.assets[0].uri);
             } else {
                 Alert.alert('Aucune image sélectionnée', 'Veuillez sélectionner une image.');
             }
         } catch (error) {
             Alert.alert('Erreur', 'Une erreur est survenue lors de la sélection de l\'image.');
+        }
+    };
+
+    // Fonction pour traduire l'adresse en latitude et longitude
+    const geocodeAddress = async (address: string) => {
+        const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(address)}&key=${GEOCODE_API_KEY}`;
+        try {
+            const response = await axios.get(url);
+            const { lat, lng } = response.data.results[0].geometry; // Récupérer latitude et longitude
+            return { lat, lng };
+        } catch (error) {
+            Alert.alert('Erreur', 'Impossible de géocoder cette adresse.');
+            return null;
         }
     };
 
@@ -54,23 +71,34 @@ const AddScreen: React.FC = () => {
             return;
         }
 
+        setLoading(true);
+
         try {
+            // Géocoder l'adresse pour obtenir les coordonnées
+            const coordinates = await geocodeAddress(address);
+            if (!coordinates) {
+                setLoading(false);
+                return;
+            }
+
             // Télécharger l'image vers Firebase Storage
             const response = await fetch(image);
             const blob = await response.blob();
-            const storageRef = ref(storage, `images/${Date.now()}`); // Créer une référence pour stocker l'image
-            await uploadBytes(storageRef, blob); // Télécharger l'image
+            const storageRef = ref(storage, `images/${Date.now()}`);
+            await uploadBytes(storageRef, blob);
 
             // Obtenir l'URL de l'image téléchargée
             const downloadURL = await getDownloadURL(storageRef);
 
-            // Ajouter les données à Firestore
+            // Ajouter les données à Firestore, y compris les coordonnées géographiques
             await addDoc(collection(firestore, 'spots'), {
-                image: downloadURL, // Stocker l'URL de l'image
+                image: downloadURL,
                 text,
                 address,
                 price: parseFloat(price),
                 category,
+                latitude: coordinates.lat, // Ajouter latitude
+                longitude: coordinates.lng, // Ajouter longitude
                 createdAt: new Date(),
             });
 
@@ -82,6 +110,8 @@ const AddScreen: React.FC = () => {
             setCategory('urbex');
         } catch (error) {
             Alert.alert('Erreur', 'Une erreur est survenue lors de l\'ajout.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -122,7 +152,7 @@ const AddScreen: React.FC = () => {
                 <Picker.Item label="Campagne" value="campagne" />
             </Picker>
 
-            <Button title="Soumettre" onPress={handleSubmit} />
+            <Button title="Soumettre" onPress={handleSubmit} disabled={loading} />
         </View>
     );
 };
